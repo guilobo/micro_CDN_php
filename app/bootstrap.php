@@ -109,6 +109,33 @@ function requestJson(): array
     return is_array($decoded) ? $decoded : [];
 }
 
+function requestHeaderValue(string $name): ?string
+{
+    $serverKey = 'HTTP_' . strtoupper(str_replace('-', '_', $name));
+    $value = $_SERVER[$serverKey] ?? null;
+
+    if (is_string($value) && trim($value) !== '') {
+        return trim($value);
+    }
+
+    if (function_exists('getallheaders')) {
+        $headers = getallheaders();
+        if (is_array($headers)) {
+            foreach ($headers as $headerName => $headerValue) {
+                if (strcasecmp((string) $headerName, $name) !== 0) {
+                    continue;
+                }
+
+                if (is_string($headerValue) && trim($headerValue) !== '') {
+                    return trim($headerValue);
+                }
+            }
+        }
+    }
+
+    return null;
+}
+
 function currentUser(): ?array
 {
     if (!isset($_SESSION['user']) || !is_array($_SESSION['user'])) {
@@ -126,6 +153,33 @@ function requireAuth(): array
     }
 
     return $user;
+}
+
+function requireApiKey(?array $payload = null): void
+{
+    $expectedKey = envValue('api_key') ?? envValue('API_KEY');
+    if ($expectedKey === null || trim($expectedKey) === '') {
+        jsonResponse(['error' => 'API key not configured'], 500);
+    }
+
+    $providedKey = null;
+
+    $authorization = requestHeaderValue('Authorization');
+    if (is_string($authorization) && preg_match('/^Bearer\s+(.+)$/i', $authorization, $matches) === 1) {
+        $providedKey = trim($matches[1]);
+    }
+
+    if ($providedKey === null) {
+        $providedKey = requestHeaderValue('X-API-Key');
+    }
+
+    if ($providedKey === null && is_array($payload)) {
+        $providedKey = $payload['api_key'] ?? $payload['API_KEY'] ?? null;
+    }
+
+    if (!is_string($providedKey) || !hash_equals($expectedKey, trim($providedKey))) {
+        jsonResponse(['error' => 'Invalid API key'], 401);
+    }
 }
 
 function normalizeRelativePath(?string $input): string
@@ -160,6 +214,36 @@ function storagePath(?string $relativePath = null): string
     }
 
     return CDN_ROOT . '/' . $relativePath;
+}
+
+function requestBoolean(array $payload, string $key, bool $default = false): bool
+{
+    if (!array_key_exists($key, $payload)) {
+        return $default;
+    }
+
+    $value = $payload[$key];
+
+    if (is_bool($value)) {
+        return $value;
+    }
+
+    if (is_int($value)) {
+        return $value !== 0;
+    }
+
+    if (is_string($value)) {
+        $normalized = strtolower(trim($value));
+        if (in_array($normalized, ['1', 'true', 'yes', 'on'], true)) {
+            return true;
+        }
+
+        if (in_array($normalized, ['0', 'false', 'no', 'off', ''], true)) {
+            return false;
+        }
+    }
+
+    return $default;
 }
 
 function listDirectoryItems(string $relativePath): array
@@ -228,4 +312,76 @@ function deletePath(string $relativePath): void
     }
 
     unlink($absolutePath);
+}
+
+function ensureDirectoryPath(string $relativePath, bool $overwrite = false): array
+{
+    $absolutePath = storagePath($relativePath);
+    $alreadyExists = file_exists($absolutePath);
+    $replacedFile = $alreadyExists && is_file($absolutePath);
+
+    if ($alreadyExists) {
+        if (is_dir($absolutePath)) {
+            if (!$overwrite) {
+                jsonResponse(['error' => 'Path already exists'], 409);
+            }
+
+            return [
+                'path' => $relativePath,
+                'type' => 'directory',
+                'overwritten' => false,
+                'alreadyExisted' => true,
+            ];
+        }
+
+        if (!$overwrite) {
+            jsonResponse(['error' => 'Path already exists'], 409);
+        }
+
+        deletePath($relativePath);
+    }
+
+    if (!mkdir($absolutePath, 0775, true) && !is_dir($absolutePath)) {
+        jsonResponse(['error' => 'Failed to create directory'], 500);
+    }
+
+    return [
+        'path' => $relativePath,
+        'type' => 'directory',
+        'overwritten' => $replacedFile,
+        'alreadyExisted' => $alreadyExists,
+    ];
+}
+
+function writeStorageFile(string $relativePath, string $content, bool $overwrite = false): array
+{
+    $absolutePath = storagePath($relativePath);
+    $alreadyExists = file_exists($absolutePath);
+
+    if ($alreadyExists) {
+        if (!$overwrite) {
+            jsonResponse(['error' => 'Path already exists'], 409);
+        }
+
+        if (is_dir($absolutePath)) {
+            deletePath($relativePath);
+        }
+    }
+
+    $directory = dirname($absolutePath);
+    if (!is_dir($directory) && !mkdir($directory, 0775, true) && !is_dir($directory)) {
+        jsonResponse(['error' => 'Failed to create directory'], 500);
+    }
+
+    if (file_put_contents($absolutePath, $content) === false) {
+        jsonResponse(['error' => 'Failed to save file'], 500);
+    }
+
+    return [
+        'path' => $relativePath,
+        'type' => 'file',
+        'overwritten' => $alreadyExists,
+        'alreadyExisted' => $alreadyExists,
+        'size' => strlen($content),
+    ];
 }

@@ -24,8 +24,52 @@ projeto/
 ## Configuracao
 
 1. Copie `.env.example` para `.env`.
-2. Ajuste `ADMIN_USERNAME`, `ADMIN_PASSWORD` e `SESSION_SECRET`.
+2. Ajuste `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `api_key` e `SESSION_SECRET`.
 3. Aponte o document root da hospedagem para `public/`.
+
+## API simples com api_key
+
+Adicione `api_key` no `.env` para autenticar chamadas externas.
+
+### Criar arquivo ou pasta
+
+`POST /api/key/upsert`
+
+Envie a chave em `X-API-Key`, `Authorization: Bearer ...` ou no corpo JSON.
+
+Exemplo para criar ou sobrescrever um arquivo:
+
+```json
+{
+  "api_key": "sua-chave",
+  "path": "clientes/demo/teste.txt",
+  "type": "file",
+  "content": "conteudo do arquivo",
+  "overwrite": true
+}
+```
+
+Exemplo para criar uma pasta:
+
+```json
+{
+  "api_key": "sua-chave",
+  "path": "clientes/demo/uploads",
+  "type": "directory",
+  "overwrite": false
+}
+```
+
+### Deletar arquivo ou pasta
+
+`POST /api/key/delete` ou `DELETE /api/key/delete`
+
+```json
+{
+  "api_key": "sua-chave",
+  "path": "clientes/demo/teste.txt"
+}
+```
 
 ## Build do frontend
 

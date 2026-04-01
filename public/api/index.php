@@ -13,6 +13,69 @@ if ($method === 'OPTIONS') {
 }
 
 switch ($route) {
+    case 'key/upsert':
+        if ($method !== 'POST') {
+            jsonResponse(['error' => 'Method not allowed'], 405);
+        }
+
+        $payload = requestJson();
+        requireApiKey($payload);
+
+        $path = normalizeRelativePath($payload['path'] ?? '');
+        $type = strtolower(trim((string) ($payload['type'] ?? 'file')));
+        $overwrite = requestBoolean($payload, 'overwrite', false);
+
+        if ($path === '') {
+            jsonResponse(['error' => 'Invalid path'], 422);
+        }
+
+        if (in_array($type, ['dir', 'directory', 'folder'], true)) {
+            jsonResponse([
+                'success' => true,
+                'item' => ensureDirectoryPath($path, $overwrite),
+            ]);
+        }
+
+        if ($type !== 'file') {
+            jsonResponse(['error' => 'Invalid type'], 422);
+        }
+
+        $content = (string) ($payload['content'] ?? '');
+
+        jsonResponse([
+            'success' => true,
+            'item' => writeStorageFile($path, $content, $overwrite),
+        ]);
+
+    case 'key/delete':
+        if (!in_array($method, ['POST', 'DELETE'], true)) {
+            jsonResponse(['error' => 'Method not allowed'], 405);
+        }
+
+        $payload = requestJson();
+        requireApiKey($payload);
+
+        $path = normalizeRelativePath($payload['path'] ?? ($_GET['path'] ?? ''));
+        if ($path === '') {
+            jsonResponse(['error' => 'Invalid path'], 422);
+        }
+
+        $absolutePath = storagePath($path);
+        if (!file_exists($absolutePath)) {
+            jsonResponse(['error' => 'Path not found'], 404);
+        }
+
+        $type = is_dir($absolutePath) ? 'directory' : 'file';
+        deletePath($path);
+
+        jsonResponse([
+            'success' => true,
+            'deleted' => [
+                'path' => $path,
+                'type' => $type,
+            ],
+        ]);
+
     case 'login':
         if ($method !== 'POST') {
             jsonResponse(['error' => 'Method not allowed'], 405);
