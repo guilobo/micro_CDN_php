@@ -13,6 +13,24 @@ if ($method === 'OPTIONS') {
 }
 
 switch ($route) {
+    case 'key/upload':
+        if ($method !== 'POST') {
+            jsonResponse(['error' => 'Method not allowed'], 405);
+        }
+
+        requireApiKey($_POST);
+
+        $basePath = normalizeRelativePath($_POST['path'] ?? '');
+        $fileSubPath = normalizeRelativePath($_POST['fileSubPath'] ?? '');
+        $uploadedFile = requestUploadedFile('files');
+        $customName = trim((string) ($_POST['customName'] ?? $uploadedFile['original_name']));
+        $overwrite = requestBoolean($_POST, 'overwrite', false);
+
+        jsonResponse([
+            'success' => true,
+            'item' => storeUploadedFile($basePath, $fileSubPath, $customName, $uploadedFile, $overwrite),
+        ]);
+
     case 'key/rename':
         if ($method !== 'POST') {
             jsonResponse(['error' => 'Method not allowed'], 405);
@@ -264,33 +282,14 @@ switch ($route) {
 
         $basePath = normalizeRelativePath($_POST['path'] ?? '');
         $fileSubPath = normalizeRelativePath($_POST['fileSubPath'] ?? '');
-        $customName = basename(trim((string) ($_POST['customName'] ?? '')));
+        $uploadedFile = requestUploadedFile('files');
+        $customName = trim((string) ($_POST['customName'] ?? $uploadedFile['original_name']));
+        $overwrite = requestBoolean($_POST, 'overwrite', false);
 
-        if ($customName === '') {
-            jsonResponse(['error' => 'Invalid file name'], 422);
-        }
-
-        if (!isset($_FILES['files']) || !is_array($_FILES['files'])) {
-            jsonResponse(['error' => 'No upload received'], 422);
-        }
-
-        if ((int) $_FILES['files']['error'] !== UPLOAD_ERR_OK) {
-            jsonResponse(['error' => 'Upload failed'], 500);
-        }
-
-        $targetRelativePath = normalizeRelativePath(trim($basePath . '/' . $fileSubPath . '/' . $customName, '/'));
-        $targetAbsolutePath = storagePath($targetRelativePath);
-        $targetDirectory = dirname($targetAbsolutePath);
-
-        if (!is_dir($targetDirectory) && !mkdir($targetDirectory, 0775, true) && !is_dir($targetDirectory)) {
-            jsonResponse(['error' => 'Failed to create upload directory'], 500);
-        }
-
-        if (!move_uploaded_file($_FILES['files']['tmp_name'], $targetAbsolutePath)) {
-            jsonResponse(['error' => 'Failed to store uploaded file'], 500);
-        }
-
-        jsonResponse(['success' => true]);
+        jsonResponse([
+            'success' => true,
+            'item' => storeUploadedFile($basePath, $fileSubPath, $customName, $uploadedFile, $overwrite),
+        ]);
 
     default:
         jsonResponse(['error' => 'API route not found'], 404);

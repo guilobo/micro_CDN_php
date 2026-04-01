@@ -450,3 +450,77 @@ function renameStoragePath(string $relativePath, ?string $newName = null, ?strin
         'newName' => basename($targetPath),
     ];
 }
+
+function requestUploadedFile(string $field = 'files'): array
+{
+    if (!isset($_FILES[$field]) || !is_array($_FILES[$field])) {
+        jsonResponse(['error' => 'No upload received'], 422);
+    }
+
+    $file = $_FILES[$field];
+    if ((int) ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+        jsonResponse(['error' => 'Upload failed'], 500);
+    }
+
+    $tmpName = (string) ($file['tmp_name'] ?? '');
+    $originalName = basename(trim((string) ($file['name'] ?? '')));
+
+    if ($tmpName === '' || $originalName === '') {
+        jsonResponse(['error' => 'Invalid uploaded file'], 422);
+    }
+
+    return [
+        'tmp_name' => $tmpName,
+        'original_name' => $originalName,
+        'size' => (int) ($file['size'] ?? 0),
+        'type' => (string) ($file['type'] ?? ''),
+    ];
+}
+
+function storeUploadedFile(
+    string $basePath,
+    string $fileSubPath,
+    string $customName,
+    array $uploadedFile,
+    bool $overwrite = false
+): array {
+    $customName = basename(trim($customName));
+    if ($customName === '') {
+        jsonResponse(['error' => 'Invalid file name'], 422);
+    }
+
+    $targetRelativePath = normalizeRelativePath(trim($basePath . '/' . $fileSubPath . '/' . $customName, '/'));
+    if ($targetRelativePath === '') {
+        jsonResponse(['error' => 'Invalid target path'], 422);
+    }
+
+    $targetAbsolutePath = storagePath($targetRelativePath);
+    $alreadyExists = file_exists($targetAbsolutePath);
+
+    if ($alreadyExists) {
+        if (!$overwrite) {
+            jsonResponse(['error' => 'Path already exists'], 409);
+        }
+
+        deletePath($targetRelativePath);
+    }
+
+    $targetDirectory = dirname($targetAbsolutePath);
+    if (!is_dir($targetDirectory) && !mkdir($targetDirectory, 0775, true) && !is_dir($targetDirectory)) {
+        jsonResponse(['error' => 'Failed to create upload directory'], 500);
+    }
+
+    if (!move_uploaded_file($uploadedFile['tmp_name'], $targetAbsolutePath)) {
+        jsonResponse(['error' => 'Failed to store uploaded file'], 500);
+    }
+
+    return [
+        'path' => $targetRelativePath,
+        'type' => 'file',
+        'alreadyExisted' => $alreadyExists,
+        'overwritten' => $alreadyExists,
+        'size' => filesize($targetAbsolutePath) ?: 0,
+        'mimeType' => $uploadedFile['type'],
+        'originalName' => $uploadedFile['original_name'],
+    ];
+}

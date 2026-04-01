@@ -119,6 +119,24 @@ The external API uses `api_key` authentication. You can send the key in:
 }
 ```
 
+### Upload a binary file
+
+`POST /api/key/upload`
+
+Send the API key in the header and the file as `multipart/form-data`.
+
+```bash
+curl -X POST "https://files.gel5.com/api/index.php?route=key/upload" \
+  -H "X-API-Key: your-api-key" \
+  -F "path=clients/demo" \
+  -F "fileSubPath=images" \
+  -F "customName=logo.png" \
+  -F "overwrite=true" \
+  -F "files=@./logo.png"
+```
+
+If `customName` is omitted, the original uploaded filename is used automatically.
+
 ### Rename a file or folder
 
 `POST /api/key/rename`
