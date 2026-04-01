@@ -31,7 +31,15 @@ function Invoke-Git {
 
 function Assert-CleanWorkingTree {
     $status = Invoke-Git -Arguments @('status', '--short')
-    if ($status.Count -gt 0) {
+    if ($null -eq $status) {
+        return
+    }
+
+    if ($status -isnot [System.Array]) {
+        $status = @([string] $status)
+    }
+
+    if ($status.Count -gt 0 -and -not [string]::IsNullOrWhiteSpace(($status -join ''))) {
         throw "Commit or stash your changes before deploying.`n$($status -join [Environment]::NewLine)"
     }
 }
