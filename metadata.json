@@ -1,0 +1,5 @@
+{
+  "name": "CDN Manager",
+  "description": "A simple CDN-like system for managing and sharing files with a built-in code editor and public links.",
+  "requestFramePermissions": []
+}
