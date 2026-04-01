@@ -122,6 +122,17 @@ const apiUrl = (path: string, query?: Record<string, string>) => {
   return `${appConfig.apiEndpoint}?${params.toString()}`;
 };
 
+const publicCdnUrl = (path: string) => {
+  const encodedPath = path
+    .split('/')
+    .filter(Boolean)
+    .map((segment) => encodeURIComponent(segment))
+    .join('/');
+
+  const cdnBase = appConfig.cdnBase.replace(/\/+$/, '');
+  return `${window.location.origin}${cdnBase}/${encodedPath}`;
+};
+
 interface FileItem {
   name: string;
   isDirectory: boolean;
@@ -441,6 +452,45 @@ export default function App() {
     fetchFiles();
   };
 
+  const renameItem = (item: FileItem) => {
+    setModal({
+      type: 'rename',
+      title: item.isDirectory ? 'Renomear Pasta' : 'Renomear Arquivo',
+      inputValue: item.name,
+      onConfirm: async (value) => {
+        const newName = (value || '').trim();
+        if (!newName) {
+          setModal(null);
+          return;
+        }
+
+        try {
+          const res = await apiFetch(apiUrl('/rename'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: item.path, newName }),
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            if (editingFile?.path === item.path) {
+              setEditingFile({ ...editingFile, path: data.item.newPath });
+            }
+            setModal(null);
+            fetchFiles();
+            return;
+          }
+
+          const data = await res.json().catch(() => ({ error: 'Erro ao renomear item' }));
+          alert(data.error || 'Erro ao renomear item');
+        } catch (err) {
+          console.error(err);
+          alert('Erro ao renomear item');
+        }
+      },
+    });
+  };
+
   const editFile = async (path: string) => {
     const res = await apiFetch(apiUrl('/read', { path }));
     if (res.ok) {
@@ -623,7 +673,7 @@ export default function App() {
   };
 
   const copyLink = (path: string) => {
-    const url = `${window.location.origin}${appConfig.cdnBase}/${path}`;
+    const url = publicCdnUrl(path);
     copyText(url)
       .then(() => {
         console.info('[Clipboard] Public link copied', { path, url });
@@ -724,7 +774,7 @@ export default function App() {
           onDragOver={handleDrag}
           onDrop={handleDrop}
         >
-          <div className="grid grid-cols-[1fr_120px_180px_120px] px-6 py-4 border-b border-white/5 text-xs font-semibold uppercase tracking-wider text-white/40">
+          <div className="grid grid-cols-[1fr_120px_180px_160px] px-6 py-4 border-b border-white/5 text-xs font-semibold uppercase tracking-wider text-white/40">
             <div>Nome</div>
             <div>Tamanho</div>
             <div>Modificado</div>
@@ -735,7 +785,7 @@ export default function App() {
             {currentPath && (
               <div
                 onClick={navigateUp}
-                className="grid grid-cols-[1fr_120px_180px_120px] px-6 py-4 hover:bg-white/5 cursor-pointer transition-colors group"
+                className="grid grid-cols-[1fr_120px_180px_160px] px-6 py-4 hover:bg-white/5 cursor-pointer transition-colors group"
               >
                 <div className="flex items-center gap-3">
                   <ChevronLeft className="w-5 h-5 text-white/20 group-hover:text-emerald-400" />
@@ -757,7 +807,7 @@ export default function App() {
             {files.map((file) => (
               <div
                 key={file.path}
-                className="grid grid-cols-[1fr_120px_180px_120px] px-6 py-4 hover:bg-white/5 items-center transition-colors group"
+                className="grid grid-cols-[1fr_120px_180px_160px] px-6 py-4 hover:bg-white/5 items-center transition-colors group"
               >
                 <div
                   className="flex items-center gap-3 cursor-pointer overflow-hidden"
@@ -769,6 +819,13 @@ export default function App() {
                 <div className="text-sm text-white/40">{file.isDirectory ? '-' : `${(file.size / 1024).toFixed(1)} KB`}</div>
                 <div className="text-sm text-white/40">{new Date(file.mtime).toLocaleDateString()}</div>
                 <div className="flex items-center justify-end gap-1">
+                  <button
+                    onClick={() => renameItem(file)}
+                    title={file.isDirectory ? 'Renomear Pasta' : 'Renomear Arquivo'}
+                    className="p-2 hover:bg-white/10 rounded-lg transition-colors text-white/40 hover:text-amber-400"
+                  >
+                    <Edit className="w-4 h-4" />
+                  </button>
                   {!file.isDirectory && (
                     <button
                       onClick={() => copyLink(file.path)}
@@ -784,7 +841,7 @@ export default function App() {
                       title="Editar Arquivo"
                       className="p-2 hover:bg-white/10 rounded-lg transition-colors text-white/40 hover:text-blue-400"
                     >
-                      <Edit className="w-4 h-4" />
+                      <FileCode className="w-4 h-4" />
                     </button>
                   )}
                   <button
@@ -839,7 +896,7 @@ export default function App() {
 
               {modal.type === 'rename' && (
                 <div className="space-y-4">
-                  <p className="text-white/60 text-xs uppercase tracking-wider font-semibold">Novo nome do arquivo</p>
+                  <p className="text-white/60 text-xs uppercase tracking-wider font-semibold">Novo nome</p>
                   <input
                     autoFocus
                     type="text"
@@ -847,7 +904,7 @@ export default function App() {
                     onChange={(e) => setModal({ ...modal, inputValue: e.target.value })}
                     onKeyDown={(e) => e.key === 'Enter' && modal.onConfirm(modal.inputValue)}
                     className="w-full px-4 py-2 bg-black border border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                    placeholder="Nome do arquivo"
+                    placeholder="Nome do item"
                   />
                   <div className="flex justify-end gap-3">
                     <button
@@ -860,7 +917,7 @@ export default function App() {
                       onClick={() => modal.onConfirm(modal.inputValue)}
                       className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-lg"
                     >
-                      Confirmar Nome
+                      Renomear
                     </button>
                   </div>
                 </div>

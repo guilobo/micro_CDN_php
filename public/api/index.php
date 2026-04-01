@@ -13,6 +13,27 @@ if ($method === 'OPTIONS') {
 }
 
 switch ($route) {
+    case 'key/rename':
+        if ($method !== 'POST') {
+            jsonResponse(['error' => 'Method not allowed'], 405);
+        }
+
+        $payload = requestJson();
+        requireApiKey($payload);
+
+        $path = normalizeRelativePath($payload['path'] ?? '');
+        $newName = trim((string) ($payload['newName'] ?? ''));
+        $newPath = normalizeRelativePath($payload['newPath'] ?? '');
+
+        if ($path === '') {
+            jsonResponse(['error' => 'Invalid path'], 422);
+        }
+
+        jsonResponse([
+            'success' => true,
+            'item' => renameStoragePath($path, $newName, $newPath !== '' ? $newPath : null),
+        ]);
+
     case 'key/upsert':
         if ($method !== 'POST') {
             jsonResponse(['error' => 'Method not allowed'], 405);
@@ -213,6 +234,26 @@ switch ($route) {
 
         deletePath($path);
         jsonResponse(['success' => true]);
+
+    case 'rename':
+        if ($method !== 'POST') {
+            jsonResponse(['error' => 'Method not allowed'], 405);
+        }
+
+        requireAuth();
+        $payload = requestJson();
+        $path = normalizeRelativePath($payload['path'] ?? '');
+        $newName = trim((string) ($payload['newName'] ?? ''));
+        $newPath = normalizeRelativePath($payload['newPath'] ?? '');
+
+        if ($path === '') {
+            jsonResponse(['error' => 'Invalid path'], 422);
+        }
+
+        jsonResponse([
+            'success' => true,
+            'item' => renameStoragePath($path, $newName, $newPath !== '' ? $newPath : null),
+        ]);
 
     case 'upload':
         if ($method !== 'POST') {

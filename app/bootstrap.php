@@ -216,6 +216,14 @@ function storagePath(?string $relativePath = null): string
     return CDN_ROOT . '/' . $relativePath;
 }
 
+function joinRelativePath(string $basePath, string $name): string
+{
+    $basePath = normalizeRelativePath($basePath);
+    $name = trim(str_replace('\\', '/', $name), '/');
+
+    return normalizeRelativePath($basePath === '' ? $name : $basePath . '/' . $name);
+}
+
 function requestBoolean(array $payload, string $key, bool $default = false): bool
 {
     if (!array_key_exists($key, $payload)) {
@@ -383,5 +391,62 @@ function writeStorageFile(string $relativePath, string $content, bool $overwrite
         'overwritten' => $alreadyExists,
         'alreadyExisted' => $alreadyExists,
         'size' => strlen($content),
+    ];
+}
+
+function renameStoragePath(string $relativePath, ?string $newName = null, ?string $newPath = null): array
+{
+    $sourcePath = normalizeRelativePath($relativePath);
+    if ($sourcePath === '') {
+        jsonResponse(['error' => 'Invalid source path'], 422);
+    }
+
+    $sourceAbsolutePath = storagePath($sourcePath);
+    if (!file_exists($sourceAbsolutePath)) {
+        jsonResponse(['error' => 'Path not found'], 404);
+    }
+
+    $targetPath = normalizeRelativePath($newPath);
+    if ($targetPath === '') {
+        $cleanName = trim((string) $newName);
+        $cleanName = trim(str_replace('\\', '/', $cleanName), '/');
+        $cleanName = basename($cleanName);
+
+        if ($cleanName === '' || $cleanName === '.' || $cleanName === '..') {
+            jsonResponse(['error' => 'Invalid new name'], 422);
+        }
+
+        $parentPath = dirname($sourcePath);
+        if ($parentPath === '.' || $parentPath === DIRECTORY_SEPARATOR) {
+            $parentPath = '';
+        }
+
+        $targetPath = joinRelativePath($parentPath, $cleanName);
+    }
+
+    if ($targetPath === '' || $targetPath === $sourcePath) {
+        jsonResponse(['error' => 'New path must be different'], 422);
+    }
+
+    $targetAbsolutePath = storagePath($targetPath);
+    if (file_exists($targetAbsolutePath)) {
+        jsonResponse(['error' => 'Destination already exists'], 409);
+    }
+
+    $targetDirectory = dirname($targetAbsolutePath);
+    if (!is_dir($targetDirectory) && !mkdir($targetDirectory, 0775, true) && !is_dir($targetDirectory)) {
+        jsonResponse(['error' => 'Failed to prepare destination'], 500);
+    }
+
+    if (!rename($sourceAbsolutePath, $targetAbsolutePath)) {
+        jsonResponse(['error' => 'Failed to rename path'], 500);
+    }
+
+    return [
+        'type' => is_dir($targetAbsolutePath) ? 'directory' : 'file',
+        'oldPath' => $sourcePath,
+        'newPath' => $targetPath,
+        'oldName' => basename($sourcePath),
+        'newName' => basename($targetPath),
     ];
 }

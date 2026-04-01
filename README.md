@@ -1,123 +1,206 @@
-# CDN Manager com frontend React e backend PHP
+# CDN Manager
 
-O projeto agora foi estruturado para hospedagem comum com PHP:
+A lightweight CDN manager with a React frontend, a PHP backend, and a very simple file API.
 
-- `public/` e o diretorio publico do site.
-- `.env` fica fora de `public/`, portanto nao fica acessivel pela web.
-- `app/` contem o bootstrap e a API PHP.
-- `public/cdn/` contem os arquivos publicados pelo gerenciador.
+This project is built for straightforward hosting environments where PHP is available and the public web root can point to `public/`. It gives you a small dashboard for browsing and editing files inside the CDN directory, plus a simple API for creating, replacing, renaming, and deleting files or folders.
 
-## Estrutura esperada
+## Highlights
+
+- Simple React dashboard for browsing CDN files
+- PHP API with session-based dashboard authentication
+- API key authentication for external integrations
+- File upload, create, edit, rename, and delete support
+- Folder creation and recursive folder deletion
+- Designed for classic shared hosting layouts
+
+## Project Structure
 
 ```text
-projeto/
+project/
   .env
+  .env.example
   app/
+    bootstrap.php
   public/
-    api/
-    build/
-    cdn/
     .htaccess
     index.php
+    router.php
+    api/
+      index.php
+    build/
+    cdn/
+  src/
+  package.json
+  vite.config.ts
 ```
 
-## Configuracao
+## How It Works
 
-1. Copie `.env.example` para `.env`.
-2. Ajuste `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `api_key` e `SESSION_SECRET`.
-3. Aponte o document root da hospedagem para `public/`.
+- `public/` is the public web root
+- `.env` stays outside `public/`, so it is not directly exposed on the web
+- `app/bootstrap.php` loads the environment and shared backend helpers
+- `public/api/index.php` exposes the dashboard and API routes
+- `public/cdn/` is the storage area managed by the application
 
-## API simples com api_key
+## Quick Start
 
-Adicione `api_key` no `.env` para autenticar chamadas externas.
+1. Copy `.env.example` to `.env`
+2. Set your dashboard credentials, API key, and session secret
+3. Install dependencies with `npm install`
+4. Build the frontend with `npm run build`
+5. Point your web server document root to `public/`
 
-### Criar arquivo ou pasta
+## Environment Variables
+
+Example `.env`:
+
+```env
+# Dashboard credentials
+ADMIN_USERNAME="admin"
+ADMIN_PASSWORD="password123"
+
+# Simple API key used by external file operations
+api_key="replace-with-a-secure-api-key"
+
+# Session security
+SESSION_SECRET="replace-with-a-secure-session-secret"
+
+# Optional debug flag
+DEBUG="false"
+```
+
+## Dashboard API
+
+These routes are used by the web interface and rely on the login session:
+
+- `POST /api/login`
+- `POST /api/logout`
+- `GET /api/me`
+- `GET /api/files`
+- `POST /api/mkdir`
+- `GET /api/read`
+- `POST /api/save`
+- `POST /api/rename`
+- `DELETE /api/delete`
+- `POST /api/upload`
+
+## Simple External API
+
+The external API uses `api_key` authentication. You can send the key in:
+
+- `X-API-Key`
+- `Authorization: Bearer ...`
+- the JSON body as `api_key`
+
+### Create or overwrite a file
 
 `POST /api/key/upsert`
 
-Envie a chave em `X-API-Key`, `Authorization: Bearer ...` ou no corpo JSON.
-
-Exemplo para criar ou sobrescrever um arquivo:
-
 ```json
 {
-  "api_key": "sua-chave",
-  "path": "clientes/demo/teste.txt",
+  "api_key": "your-api-key",
+  "path": "clients/demo/example.txt",
   "type": "file",
-  "content": "conteudo do arquivo",
+  "content": "Hello from the simple CDN API",
   "overwrite": true
 }
 ```
 
-Exemplo para criar uma pasta:
+### Create a folder
+
+`POST /api/key/upsert`
 
 ```json
 {
-  "api_key": "sua-chave",
-  "path": "clientes/demo/uploads",
+  "api_key": "your-api-key",
+  "path": "clients/demo/uploads",
   "type": "directory",
   "overwrite": false
 }
 ```
 
-### Deletar arquivo ou pasta
+### Rename a file or folder
 
-`POST /api/key/delete` ou `DELETE /api/key/delete`
+`POST /api/key/rename`
 
 ```json
 {
-  "api_key": "sua-chave",
-  "path": "clientes/demo/teste.txt"
+  "api_key": "your-api-key",
+  "path": "clients/demo/example.txt",
+  "newName": "example-renamed.txt"
 }
 ```
 
-## Build do frontend
+You can also send `newPath` if you want to move and rename in a single request.
+
+### Delete a file or folder
+
+`POST /api/key/delete` or `DELETE /api/key/delete`
+
+```json
+{
+  "api_key": "your-api-key",
+  "path": "clients/demo/example-renamed.txt"
+}
+```
+
+## Local Development
+
+Install dependencies:
 
 ```bash
 npm install
+```
+
+Run type checking:
+
+```bash
+npm run lint
+```
+
+Build the frontend:
+
+```bash
 npm run build
 ```
 
-## Arquivos para producao
+Run the PHP app locally:
 
-Envie para o servidor exatamente estes itens:
+```bash
+php -S localhost:8000 -t public public/router.php
+```
 
-### Fora da pasta publica
+Then open `http://localhost:8000`.
 
-Estes arquivos e pastas devem ficar fora do web root:
+## Production Deployment
+
+Upload these items outside the public web root:
 
 ```text
 app/
-app/bootstrap.php
-
 .env
 ```
 
-### Dentro da pasta publica do site
-
-Estes arquivos e pastas devem ficar dentro da pasta publica da hospedagem (`public/` ou `public_html/`):
+Upload these items inside the public web root (`public/` or `public_html/`):
 
 ```text
 public/.htaccess
 public/index.php
+public/router.php
 public/api/
-public/api/index.php
 public/build/
-public/build/index.html
-public/build/.vite/manifest.json
-public/build/assets/
 public/cdn/
 ```
 
-Observacoes:
+Notes:
 
-- `public/cdn/` deve ser enviado se voce ja tiver arquivos publicados.
-- Se `public/cdn/` estiver vazio, crie a pasta no servidor mesmo assim.
-- Se a sua hospedagem usar `public_html`, coloque o conteudo de `public/` dentro de `public_html` e mantenha `app/` e `.env` um nivel acima.
+- Keep `public/cdn/` in place even if it starts empty
+- If your host uses `public_html`, move the contents of `public/` into `public_html`
+- Keep `app/` and `.env` one level above the public web root
 
-### Nao enviar para producao
+## Not Required In Production
 
-Nao precisa enviar estes itens para o servidor:
+These files are development-only and usually do not need to be deployed:
 
 ```text
 src/
@@ -131,15 +214,6 @@ package-lock.json
 tsconfig.json
 vite.config.ts
 .env.example
-.env copy.example
 README.md
 metadata.json
 ```
-
-## Teste local com PHP
-
-```bash
-php -S localhost:8000 -t public public/router.php
-```
-
-Depois acesse `http://localhost:8000`.
