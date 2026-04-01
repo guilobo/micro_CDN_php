@@ -7,8 +7,10 @@
     "dev": "vite",
     "build": "npm run clean && vite build",
     "preview": "php -S localhost:8000 -t public public/router.php",
-    "clean": "powershell -Command \"if (Test-Path public\\\\build) { Remove-Item -Recurse -Force public\\\\build }\"",
-    "lint": "tsc --noEmit"
+    "clean": "powershell -NoProfile -Command \"if (Test-Path public\\\\build) { Remove-Item -Recurse -Force public\\\\build }\"",
+    "lint": "tsc --noEmit",
+    "deploy:production:setup": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup-production-git-deploy.ps1",
+    "deploy:production": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/deploy-production.ps1"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",

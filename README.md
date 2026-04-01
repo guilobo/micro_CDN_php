@@ -174,14 +174,62 @@ Then open `http://localhost:8000`.
 
 ## Production Deployment
 
-Upload these items outside the public web root:
+This project includes a Git-based production deploy flow.
+
+### One-time setup
+
+Run:
+
+```bash
+npm run deploy:production:setup
+```
+
+This setup script will:
+
+- generate a dedicated SSH deploy key on your machine
+- register the public key on the production server
+- create a bare Git repository on the server
+- install a `post-receive` hook for automatic checkout
+- configure the local `production` Git remote
+
+### Deploy to production
+
+Run:
+
+```bash
+npm run deploy:production
+```
+
+The deploy script will:
+
+- verify the working tree is clean
+- run TypeScript checks
+- build the frontend locally
+- create a temporary Git deploy commit including `public/build`
+- force-push that deploy snapshot to the `production` remote
+- trigger the server-side hook that updates the live application
+
+### Server layout
+
+The production server uses this layout:
+
+```text
+~/repos/files.gel5.com.git   # bare Git repository
+~/files.gel5.com             # live application directory
+```
+
+### Files expected outside the public web root
+
+Keep these items outside the public web root:
 
 ```text
 app/
 .env
 ```
 
-Upload these items inside the public web root (`public/` or `public_html/`):
+### Files expected inside the public web root
+
+Keep these items inside the public web root (`public/` or `public_html/`):
 
 ```text
 public/.htaccess
@@ -194,6 +242,7 @@ public/cdn/
 
 Notes:
 
+- `public/build/` is generated locally and included automatically during deploy
 - Keep `public/cdn/` in place even if it starts empty
 - If your host uses `public_html`, move the contents of `public/` into `public_html`
 - Keep `app/` and `.env` one level above the public web root
