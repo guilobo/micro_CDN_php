@@ -112,20 +112,20 @@ if (-not (Test-Path -LiteralPath $buildPath)) {
 Invoke-Git -Arguments @('remote', 'get-url', $RemoteName) | Out-Null
 
 try {
-    Invoke-Git -Arguments @('worktree', 'add', '--detach', $tempPath, 'HEAD')
+    Invoke-Git -Arguments @('worktree', 'add', '--quiet', '--detach', $tempPath, 'HEAD')
     Copy-Item -LiteralPath $buildPath -Destination (Join-Path $tempPath 'public\build') -Recurse -Force
 
     Invoke-Git -Arguments @('add', '-f', 'public/build') -WorkingDirectory $tempPath | Out-Null
     Invoke-Git -Arguments @('commit', '-m', $deployMessage, '--no-verify') -WorkingDirectory $tempPath | Out-Null
 
     $env:GIT_SSH_COMMAND = "ssh -i `"$deployKeyPath`" -o StrictHostKeyChecking=accept-new"
-    Invoke-Git -Arguments @('push', $RemoteName, "HEAD:refs/heads/$RemoteBranch", '--force') -WorkingDirectory $tempPath | Out-Null
+    Invoke-Git -Arguments @('push', '--quiet', $RemoteName, "HEAD:refs/heads/$RemoteBranch", '--force') -WorkingDirectory $tempPath | Out-Null
     Write-Host "Production deploy completed from $headShortSha."
 } finally {
     Remove-Item Env:\GIT_SSH_COMMAND -ErrorAction SilentlyContinue
 
     try {
-        Invoke-Git -Arguments @('worktree', 'remove', $tempPath, '--force')
+        Invoke-Git -Arguments @('worktree', 'remove', '--quiet', $tempPath, '--force')
     } catch {
         if (Test-Path -LiteralPath $tempPath) {
             Remove-Item -LiteralPath $tempPath -Recurse -Force
