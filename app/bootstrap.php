@@ -295,6 +295,98 @@ function listDirectoryItems(string $relativePath): array
     return $results;
 }
 
+function storageItemMetadata(string $relativePath): array
+{
+    $relativePath = normalizeRelativePath($relativePath);
+    $absolutePath = storagePath($relativePath);
+
+    if (!file_exists($absolutePath)) {
+        jsonResponse(['error' => 'Path not found'], 404);
+    }
+
+    $isDirectory = is_dir($absolutePath);
+
+    return [
+        'exists' => true,
+        'name' => basename($relativePath),
+        'path' => $relativePath,
+        'type' => $isDirectory ? 'directory' : 'file',
+        'size' => is_file($absolutePath) ? filesize($absolutePath) ?: 0 : null,
+        'mime_type' => is_file($absolutePath) ? storageMimeType($absolutePath) : null,
+        'last_modified' => filemtime($absolutePath) ?: null,
+    ];
+}
+
+function storageMimeType(string $absolutePath): ?string
+{
+    if (!is_file($absolutePath)) {
+        return null;
+    }
+
+    $mimeType = null;
+
+    if (function_exists('finfo_open')) {
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        if ($finfo !== false) {
+            $detectedType = finfo_file($finfo, $absolutePath);
+            finfo_close($finfo);
+
+            if (is_string($detectedType) && $detectedType !== '') {
+                $mimeType = $detectedType;
+            }
+        }
+    }
+
+    if ($mimeType === null && function_exists('mime_content_type')) {
+        $detectedType = mime_content_type($absolutePath);
+        if (is_string($detectedType) && $detectedType !== '') {
+            $mimeType = $detectedType;
+        }
+    }
+
+    return $mimeType;
+}
+
+function listStorageItems(string $relativePath, bool $deep = false): array
+{
+    $relativePath = normalizeRelativePath($relativePath);
+    $absolutePath = storagePath($relativePath);
+
+    if (!is_dir($absolutePath)) {
+        jsonResponse(['error' => 'Directory not found'], 404);
+    }
+
+    $items = scandir($absolutePath);
+    if ($items === false) {
+        jsonResponse(['error' => 'Failed to list files'], 500);
+    }
+
+    $results = [];
+
+    foreach ($items as $item) {
+        if ($item === '.' || $item === '..') {
+            continue;
+        }
+
+        $itemRelativePath = normalizeRelativePath(($relativePath !== '' ? $relativePath . '/' : '') . $item);
+        $results[] = storageItemMetadata($itemRelativePath);
+
+        if ($deep && is_dir(storagePath($itemRelativePath))) {
+            $results = array_merge($results, listStorageItems($itemRelativePath, true));
+        }
+    }
+
+    usort($results, static function (array $left, array $right): int {
+        if ($left['type'] !== $right['type']) {
+            return $left['type'] === 'directory' ? -1 : 1;
+        }
+
+        return strcasecmp((string) $left['path'], (string) $right['path']);
+    });
+
+    return $results;
+}
+
 function deletePath(string $relativePath): void
 {
     $absolutePath = storagePath($relativePath);
@@ -449,6 +541,77 @@ function renameStoragePath(string $relativePath, ?string $newName = null, ?strin
         'oldName' => basename($sourcePath),
         'newName' => basename($targetPath),
     ];
+}
+
+function copyStoragePath(string $relativePath, string $newPath): array
+{
+    $sourcePath = normalizeRelativePath($relativePath);
+    $targetPath = normalizeRelativePath($newPath);
+
+    if ($sourcePath === '' || $targetPath === '') {
+        jsonResponse(['error' => 'Invalid path'], 422);
+    }
+
+    if ($sourcePath === $targetPath) {
+        jsonResponse(['error' => 'Destination must be different'], 422);
+    }
+
+    $sourceAbsolutePath = storagePath($sourcePath);
+    if (!file_exists($sourceAbsolutePath)) {
+        jsonResponse(['error' => 'Path not found'], 404);
+    }
+
+    if (is_dir($sourceAbsolutePath) && str_starts_with($targetPath . '/', $sourcePath . '/')) {
+        jsonResponse(['error' => 'Cannot copy a directory into itself'], 422);
+    }
+
+    $targetAbsolutePath = storagePath($targetPath);
+    if (file_exists($targetAbsolutePath)) {
+        jsonResponse(['error' => 'Destination already exists'], 409);
+    }
+
+    copyPathRecursive($sourceAbsolutePath, $targetAbsolutePath);
+
+    return [
+        'type' => is_dir($targetAbsolutePath) ? 'directory' : 'file',
+        'oldPath' => $sourcePath,
+        'newPath' => $targetPath,
+        'oldName' => basename($sourcePath),
+        'newName' => basename($targetPath),
+    ];
+}
+
+function copyPathRecursive(string $sourceAbsolutePath, string $targetAbsolutePath): void
+{
+    if (is_dir($sourceAbsolutePath)) {
+        if (!mkdir($targetAbsolutePath, 0775, true) && !is_dir($targetAbsolutePath)) {
+            jsonResponse(['error' => 'Failed to create destination directory'], 500);
+        }
+
+        $items = scandir($sourceAbsolutePath);
+        if ($items === false) {
+            jsonResponse(['error' => 'Failed to read source directory'], 500);
+        }
+
+        foreach ($items as $item) {
+            if ($item === '.' || $item === '..') {
+                continue;
+            }
+
+            copyPathRecursive($sourceAbsolutePath . '/' . $item, $targetAbsolutePath . '/' . $item);
+        }
+
+        return;
+    }
+
+    $targetDirectory = dirname($targetAbsolutePath);
+    if (!is_dir($targetDirectory) && !mkdir($targetDirectory, 0775, true) && !is_dir($targetDirectory)) {
+        jsonResponse(['error' => 'Failed to prepare destination'], 500);
+    }
+
+    if (!copy($sourceAbsolutePath, $targetAbsolutePath)) {
+        jsonResponse(['error' => 'Failed to copy file'], 500);
+    }
 }
 
 function requestUploadedFile(string $field = 'files'): array

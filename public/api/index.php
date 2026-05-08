@@ -115,6 +115,95 @@ switch ($route) {
             ],
         ]);
 
+    case 'key/read':
+        if (!in_array($method, ['GET', 'POST'], true)) {
+            jsonResponse(['error' => 'Method not allowed'], 405);
+        }
+
+        $payload = $method === 'POST' ? requestJson() : [];
+        requireApiKey($payload);
+
+        $path = normalizeRelativePath($payload['path'] ?? ($_GET['path'] ?? ''));
+        if ($path === '') {
+            jsonResponse(['error' => 'Invalid path'], 422);
+        }
+
+        $absolutePath = storagePath($path);
+        if (!is_file($absolutePath)) {
+            jsonResponse(['error' => 'File not found'], 404);
+        }
+
+        $content = file_get_contents($absolutePath);
+        if ($content === false) {
+            jsonResponse(['error' => 'Failed to read file'], 500);
+        }
+
+        jsonResponse([
+            'success' => true,
+            'path' => $path,
+            'encoding' => 'base64',
+            'content' => base64_encode($content),
+        ]);
+
+    case 'key/meta':
+        if (!in_array($method, ['GET', 'POST'], true)) {
+            jsonResponse(['error' => 'Method not allowed'], 405);
+        }
+
+        $payload = $method === 'POST' ? requestJson() : [];
+        requireApiKey($payload);
+
+        $path = normalizeRelativePath($payload['path'] ?? ($_GET['path'] ?? ''));
+        if ($path === '') {
+            jsonResponse(['error' => 'Invalid path'], 422);
+        }
+
+        $absolutePath = storagePath($path);
+        if (!file_exists($absolutePath)) {
+            jsonResponse(['error' => 'Path not found', 'exists' => false], 404);
+        }
+
+        jsonResponse([
+            'success' => true,
+            'item' => storageItemMetadata($path),
+        ]);
+
+    case 'key/list':
+        if (!in_array($method, ['GET', 'POST'], true)) {
+            jsonResponse(['error' => 'Method not allowed'], 405);
+        }
+
+        $payload = $method === 'POST' ? requestJson() : [];
+        requireApiKey($payload);
+
+        $path = normalizeRelativePath($payload['path'] ?? ($_GET['path'] ?? ''));
+        $deep = requestBoolean($payload + $_GET, 'deep', false);
+
+        jsonResponse([
+            'success' => true,
+            'items' => listStorageItems($path, $deep),
+        ]);
+
+    case 'key/copy':
+        if ($method !== 'POST') {
+            jsonResponse(['error' => 'Method not allowed'], 405);
+        }
+
+        $payload = requestJson();
+        requireApiKey($payload);
+
+        $path = normalizeRelativePath($payload['path'] ?? '');
+        $newPath = normalizeRelativePath($payload['newPath'] ?? '');
+
+        if ($path === '' || $newPath === '') {
+            jsonResponse(['error' => 'Invalid path'], 422);
+        }
+
+        jsonResponse([
+            'success' => true,
+            'item' => copyStoragePath($path, $newPath),
+        ]);
+
     case 'login':
         if ($method !== 'POST') {
             jsonResponse(['error' => 'Method not allowed'], 405);
