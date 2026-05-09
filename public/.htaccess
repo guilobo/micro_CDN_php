@@ -1,5 +1,14 @@
 Options -Indexes
 
+<IfModule mod_headers.c>
+    SetEnvIf Request_URI "^/cdn/" GEL5_CDN_REQUEST=1
+
+    Header always set Access-Control-Allow-Origin "*" env=GEL5_CDN_REQUEST
+    Header always set Access-Control-Allow-Methods "GET, HEAD, OPTIONS" env=GEL5_CDN_REQUEST
+    Header always set Access-Control-Allow-Headers "Origin, Range, Accept, Content-Type" env=GEL5_CDN_REQUEST
+    Header always set Access-Control-Expose-Headers "Content-Length, Content-Type, Content-Range, Accept-Ranges" env=GEL5_CDN_REQUEST
+</IfModule>
+
 RewriteEngine On
 
 RewriteRule (^|/)\. - [F,L]
