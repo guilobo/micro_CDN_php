@@ -18,7 +18,15 @@ function Invoke-Git {
 
     Push-Location $WorkingDirectory
     try {
-        $output = & git @Arguments 2>&1
+        $previousErrorActionPreference = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+
+        try {
+            $output = & git @Arguments 2>&1
+        } finally {
+            $ErrorActionPreference = $previousErrorActionPreference
+        }
+
         if ($LASTEXITCODE -ne 0) {
             throw "Git command failed: git $($Arguments -join ' ')`n$output"
         }
