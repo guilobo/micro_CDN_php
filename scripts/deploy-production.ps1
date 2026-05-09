@@ -118,7 +118,7 @@ try {
     Invoke-Git -Arguments @('add', '-f', 'public/build') -WorkingDirectory $tempPath | Out-Null
     Invoke-Git -Arguments @('commit', '-m', $deployMessage, '--no-verify') -WorkingDirectory $tempPath | Out-Null
 
-    $env:GIT_SSH_COMMAND = "ssh -i `"$deployKeyPath`" -o StrictHostKeyChecking=accept-new"
+    $env:GIT_SSH_COMMAND = "ssh -i `"$deployKeyPath`" -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR"
     Invoke-Git -Arguments @('push', '--quiet', $RemoteName, "HEAD:refs/heads/$RemoteBranch", '--force') -WorkingDirectory $tempPath | Out-Null
     Write-Host "Production deploy completed from $headShortSha."
 } finally {
